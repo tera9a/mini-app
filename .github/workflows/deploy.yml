@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Kodu checkout et
         uses: actions/checkout@v3
@@ -28,3 +28,39 @@ jobs:
         run: |
           docker build -f Dockerfile.ui -t ${{ secrets.DOCKER_USERNAME }}/mini-app-ui:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/mini-app-ui:latest
+
+  aws-deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu checkout et
+        uses: actions/checkout@v3
+
+      - name: EC2-ye deploy et
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_SECRET_KEY }}
+          port: 22
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/mini-app-api:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/mini-app-ui:latest
+            docker stop mini-app-api mini-app-ui mini-app-db || true
+            docker rm mini-app-api mini-app-ui mini-app-db || true
+            docker network create mini-app-network || true
+            docker run -d --name mini-app-db \
+              --network mini-app-network \
+              -e SA_PASSWORD=YourStrong@Passw0rd \
+              -e ACCEPT_EULA=Y \
+              mcr.microsoft.com/mssql/server:2022-latest
+            sleep 20
+            docker run -d --name mini-app-api \
+              --network mini-app-network \
+              -p 5000:8080 \
+              -e ConnectionStrings__DefaultConnection="Server=mini-app-db,1433;Database=AuthDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;" \
+              ${{ secrets.DOCKER_USERNAME }}/mini-app-api:latest
+            docker run -d --name mini-app-ui \
+              --network mini-app-network \
+              -p 3000:80 \
+              ${{ secrets.DOCKER_USERNAME }}/mini-app-ui:latest
