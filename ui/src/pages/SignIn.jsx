@@ -8,7 +8,7 @@ function SignIn({ onSwitch, onLogin }) {
 
   const submit = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch('http://13.51.206.93:5000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
